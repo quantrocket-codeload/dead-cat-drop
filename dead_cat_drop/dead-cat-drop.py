@@ -1,4 +1,4 @@
-# Copyright 2020 QuantRocket LLC - All Rights Reserved
+# Copyright QuantRocket LLC - All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 import pandas as pd
 from moonshot import Moonshot
 from moonshot.commission import PercentageCommission
-from quantrocket.fundamental import get_ibkr_shortable_shares_reindexed_like
+from quantrocket.fundamental import get_ibkr_shortable_shares_reindexed_like, get_ibkr_borrow_fees_reindexed_like
 from quantrocket.master import get_securities_reindexed_like
 
 class DeadCatDrop(Moonshot):
@@ -27,6 +27,7 @@ class DeadCatDrop(Moonshot):
     MAX_WEIGHT_PER_POSITION = 0.1
     LIMIT_TO_CURRENCY = None
     COMMISSION_CLASS = None
+    MIN_BORROW_FEE = None
     POSITIONS_CLOSED_DAILY = True # see https://www.quantrocket.com/docs/#moonshot-commissions-and-slippage-for-intraday-positions
     CONSTRAIN_SHORTABLE = False # whether to limit position sizes by shortable shares
 
@@ -47,6 +48,10 @@ class DeadCatDrop(Moonshot):
                 closes, "Currency").loc["Currency"]
             are_eligible &= currencies == self.LIMIT_TO_CURRENCY
 
+        if self.MIN_BORROW_FEE:
+            borrow_fees = get_ibkr_borrow_fees_reindexed_like(closes)
+            are_eligible &= borrow_fees >= self.MIN_BORROW_FEE
+
         # Compute big losers mask
         prior_returns = (closes - closes.shift()) / closes.shift()
         big_losers = prior_returns <= -0.10
@@ -65,7 +70,7 @@ class DeadCatDrop(Moonshot):
 
         if self.CONSTRAIN_SHORTABLE:
             t = f"09:00:00 {self.TIMEZONE}"
-            shortable_shares = get_ibkr_shortable_shares_reindexed_like(prices.loc["Close"], t)
+            shortable_shares = get_ibkr_shortable_shares_reindexed_like(prices.loc["Close"], time=t)
             # constrain today's target weights by tomorrow's shortable shares, when the position will be entered
             max_shares_for_shorts = shortable_shares.shift(-1)
 
